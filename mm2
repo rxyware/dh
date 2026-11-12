@@ -3452,6 +3452,7 @@ return (function(...)
 		setSubTabs(visualsTab, { "Shader", "ESP", "BackTrack", "Models" })
 		local skinTab = addTab("Skin Changer", "star", "every MM2 knife and gun, only you see them")
 		local cursorsTab = addTab("Cursors", "bolt", "your own cursor")
+		local worldTab = addTab("World", "globe", "fog, skybox and materials")
 		local stopCursor
 		local stopEsp
 		local stopSpin
@@ -3466,6 +3467,124 @@ return (function(...)
 		local stopSkyWorms
 		local stopAwm
 		local stopRoleFling
+		local stopWorld
+
+		-- ── World state ───────────────────────────────────────────────────────
+		local Lighting = game:GetService("Lighting")
+		local origFogStart  = Lighting.FogStart
+		local origFogEnd    = Lighting.FogEnd
+		local origFogColor  = Lighting.FogColor
+		local origSkybox    = Lighting:FindFirstChildOfClass("Sky")
+		local origMats      = {}
+		local origColors    = {}
+		local rotatingSkyConn = nil
+		local worldFogEnabled = false
+		local worldMatConn  = nil
+
+		local skyboxes = {
+			Piss      = { SkyboxUp="rbxassetid://2651437350", SkyboxRt="rbxassetid://2651436979", SkyboxLf="rbxassetid://2651436494", SkyboxFt="rbxassetid://2651435990", SkyboxBk="rbxassetid://2651432901", SkyboxDn="rbxassetid://2651434974" },
+			Peach     = { SkyboxUp="rbxassetid://566616187",   SkyboxRt="rbxassetid://566616082",   SkyboxLf="rbxassetid://566616044",   SkyboxFt="rbxassetid://566616141",   SkyboxBk="rbxassetid://566616113",   SkyboxDn="rbxassetid://566616232" },
+			Saku      = { SkyboxUp="https://www.roblox.com/asset/?id=271077958", SkyboxRt="https://www.roblox.com/asset/?id=271042467", SkyboxLf="https://www.roblox.com/asset/?id=271042310", SkyboxFt="https://www.roblox.com/asset/?id=271042556", SkyboxBk="https://www.roblox.com/asset/?id=271042516", SkyboxDn="https://www.roblox.com/asset/?id=271077243" },
+			Purple    = { SkyboxUp="rbxassetid://570557727",   SkyboxRt="rbxassetid://570557672",   SkyboxLf="rbxassetid://570557620",   SkyboxFt="rbxassetid://570557559",   SkyboxBk="rbxassetid://570557514",   SkyboxDn="rbxassetid://570557775" },
+			Retro     = { SkyboxUp="rbxassetid://18164890128", SkyboxRt="rbxassetid://18164873920", SkyboxLf="rbxassetid://18164877945", SkyboxFt="rbxassetid://18164870251", SkyboxBk="rbxassetid://18164881924", SkyboxDn="rbxassetid://18166113875" },
+			Space     = { SkyboxUp="rbxassetid://15983964246", SkyboxRt="rbxassetid://15983966246", SkyboxLf="rbxassetid://15983967420", SkyboxFt="rbxassetid://15983965025", SkyboxBk="rbxassetid://15983968922", SkyboxDn="rbxassetid://15983966825" },
+			Sea       = { SkyboxUp="https://www.roblox.com/asset/?id=321846070", SkyboxRt="https://www.roblox.com/asset/?id=321846207", SkyboxLf="https://www.roblox.com/asset/?id=321846162", SkyboxFt="https://www.roblox.com/asset/?id=321845951", SkyboxBk="https://www.roblox.com/asset/?id=321846018", SkyboxDn="https://www.roblox.com/asset/?id=321846104" },
+			["Night V2"] = { SkyboxUp="https://www.roblox.com/Asset/?ID=12064131", SkyboxRt="https://www.roblox.com/Asset/?ID=12064115", SkyboxLf="https://www.roblox.com/Asset/?ID=12063984", SkyboxFt="https://www.roblox.com/Asset/?ID=12064121", SkyboxBk="https://www.roblox.com/Asset/?ID=12064107", SkyboxDn="https://www.roblox.com/Asset/?ID=12064152" },
+			Dark      = { SkyboxUp="rbxassetid://15470160563", SkyboxRt="rbxassetid://15470158022", SkyboxLf="rbxassetid://15470155938", SkyboxFt="rbxassetid://15470153860", SkyboxBk="rbxassetid://15470149279", SkyboxDn="rbxassetid://15470151245" },
+			Anime     = { SkyboxUp="https://www.roblox.com/asset/?id=104038404823203", SkyboxRt="https://www.roblox.com/asset/?id=99961685452126", SkyboxLf="https://www.roblox.com/asset/?id=84924000207295", SkyboxFt="https://www.roblox.com/asset/?id=95687237979398", SkyboxBk="https://www.roblox.com/asset/?id=81858382098344", SkyboxDn="https://www.roblox.com/asset/?id=138472117789684" },
+			Beach     = { SkyboxUp="http://www.roblox.com/asset/?id=151165227",   SkyboxRt="http://www.roblox.com/asset/?id=151165206",   SkyboxLf="http://www.roblox.com/asset/?id=151165191",   SkyboxFt="http://www.roblox.com/asset/?id=151165224",   SkyboxBk="http://www.roblox.com/asset/?id=151165214",   SkyboxDn="http://www.roblox.com/asset/?id=151165197" },
+			["Space V2"] = { SkyboxUp="http://www.roblox.com/asset/?id=16262366016", SkyboxRt="http://www.roblox.com/asset/?id=16262363873", SkyboxLf="http://www.roblox.com/asset/?id=16262362003", SkyboxFt="http://www.roblox.com/asset/?id=16262360469", SkyboxBk="http://www.roblox.com/asset/?id=16262356578", SkyboxDn="http://www.roblox.com/asset/?id=16262358026" },
+			Pink      = { SkyboxUp="rbxassetid://12635316856", SkyboxRt="rbxassetid://12635315817", SkyboxLf="rbxassetid://12635313718", SkyboxFt="rbxassetid://12635312870", SkyboxBk="rbxassetid://12635309703", SkyboxDn="rbxassetid://12635311686" },
+			Rainbow   = { SkyboxUp="rbxassetid://12877083856", SkyboxRt="rbxassetid://12877085497", SkyboxLf="rbxassetid://12877085497", SkyboxFt="rbxassetid://12877085497", SkyboxBk="rbxassetid://12877085497", SkyboxDn="rbxassetid://12877086914" },
+			Forest    = { SkyboxUp="http://www.roblox.com/asset/?id=237593929",   SkyboxRt="http://www.roblox.com/asset/?id=237593835",   SkyboxLf="http://www.roblox.com/asset/?id=237593861",   SkyboxFt="http://www.roblox.com/asset/?id=237593922",   SkyboxBk="http://www.roblox.com/asset/?id=237593887",   SkyboxDn="http://www.roblox.com/asset/?id=237593849" },
+			Night     = { SkyboxUp="http://www.roblox.com/asset/?id=154185031",   SkyboxRt="http://www.roblox.com/asset/?id=154184972",   SkyboxLf="http://www.roblox.com/asset/?id=154184943",   SkyboxFt="http://www.roblox.com/asset/?id=154185021",   SkyboxBk="http://www.roblox.com/asset/?id=154185004",   SkyboxDn="http://www.roblox.com/asset/?id=154184960" },
+			Lava      = { SkyboxUp="http://www.roblox.com/asset/?id=4776130793",  SkyboxRt="http://www.roblox.com/asset/?id=4776133150",  SkyboxLf="http://www.roblox.com/asset/?id=4776128425",  SkyboxFt="http://www.roblox.com/asset/?id=4776131365",  SkyboxBk="http://www.roblox.com/asset/?id=4776124334",  SkyboxDn="http://www.roblox.com/asset/?id=4776125375" },
+			Rainy     = { SkyboxUp="http://www.roblox.com/asset/?id=4495867486",  SkyboxRt="http://www.roblox.com/asset/?id=4495866584",  SkyboxLf="http://www.roblox.com/asset/?id=4495866035",  SkyboxFt="http://www.roblox.com/asset/?id=4495865458",  SkyboxBk="http://www.roblox.com/asset/?id=4495864450",  SkyboxDn="http://www.roblox.com/asset/?id=4495864887" },
+			Green     = { SkyboxUp="rbxassetid://566611218",   SkyboxRt="rbxassetid://566611300",   SkyboxLf="rbxassetid://566611266",   SkyboxFt="rbxassetid://566611142",   SkyboxBk="rbxassetid://566611187",   SkyboxDn="rbxassetid://566613198" },
+			Volcanic  = { SkyboxUp="http://www.roblox.com/asset/?id=150281471",   SkyboxRt="http://www.roblox.com/asset/?id=150281426",   SkyboxLf="http://www.roblox.com/asset/?id=150281400",   SkyboxFt="http://www.roblox.com/asset/?id=150281461",   SkyboxBk="http://www.roblox.com/asset/?id=150281446",   SkyboxDn="http://www.roblox.com/asset/?id=150281418" },
+			Minecraft = { SkyboxUp="http://www.roblox.com/asset/?id=8735166729",  SkyboxRt="http://www.roblox.com/asset/?id=8735166751",  SkyboxLf="http://www.roblox.com/asset/?id=8735166755",  SkyboxFt="http://www.roblox.com/asset/?id=8735231668",  SkyboxBk="rbxassetid://8735166756",                     SkyboxDn="http://www.roblox.com/asset/?id=8735166707" },
+			Lucid     = { SkyboxUp="rbxassetid://8508112781",  SkyboxRt="rbxassetid://8508111092",  SkyboxLf="rbxassetid://8508107681",  SkyboxFt="rbxassetid://8508104949",  SkyboxBk="rbxassetid://8508098796",  SkyboxDn="rbxassetid://8508103588" },
+			Nebulous  = { SkyboxUp="rbxassetid://131036626982613", SkyboxRt="rbxassetid://103716549795832", SkyboxLf="rbxassetid://126542804346203", SkyboxFt="rbxassetid://107665368823185", SkyboxBk="rbxassetid://95020137072033", SkyboxDn="rbxassetid://92862258103959" },
+		}
+
+		local function applySky(name)
+			local sky = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky", Lighting)
+			if not origSkybox then
+				origSkybox = { SkyboxBk=sky.SkyboxBk, SkyboxDn=sky.SkyboxDn, SkyboxFt=sky.SkyboxFt, SkyboxLf=sky.SkyboxLf, SkyboxRt=sky.SkyboxRt, SkyboxUp=sky.SkyboxUp }
+			end
+			local src = name and skyboxes[name] or origSkybox
+			if src then for k, v in pairs(src) do sky[k] = v end end
+		end
+
+		local function toggleRotatingSkybox(on)
+			if rotatingSkyConn then rotatingSkyConn:Disconnect(); rotatingSkyConn = nil end
+			if on then
+				local sky = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky", Lighting)
+				rotatingSkyConn = connect(game:GetService("RunService").PreRender, function(dt)
+					sky.SkyboxOrientation = sky.SkyboxOrientation + Vector3.new(0, 30 * dt, 0)
+				end)
+			else
+				local sky = Lighting:FindFirstChildOfClass("Sky")
+				if sky then sky.SkyboxOrientation = Vector3.new(0, 0, 0) end
+			end
+		end
+
+		local function setFog(on)
+			if on then
+				Lighting.FogStart = config["World/Fog/Start"] or 0
+				Lighting.FogEnd   = config["World/Fog/End"]   or 500
+				local c = config["World/Fog/Color"]
+				Lighting.FogColor = c and Color3.fromRGB(c[1]*255, c[2]*255, c[3]*255) or Color3.fromRGB(180,180,200)
+			else
+				Lighting.FogStart = origFogStart
+				Lighting.FogEnd   = origFogEnd
+				Lighting.FogColor = origFogColor
+			end
+		end
+
+		local function applyWorldMat(mat)
+			for _, p in ipairs(workspace:GetDescendants()) do
+				if p:IsA("BasePart") then
+					if not origMats[p] then origMats[p] = p.Material end
+					p.Material = mat
+				end
+			end
+			worldMatConn = worldMatConn or connect(workspace.DescendantAdded, function(p)
+				if p:IsA("BasePart") then
+					if not origMats[p] then origMats[p] = p.Material end
+					local m = config["World/Material/Selected"]
+					if m then pcall(function() p.Material = Enum.Material[m] end) end
+				end
+			end)
+		end
+
+		local function resetWorldMat()
+			if worldMatConn then worldMatConn:Disconnect(); worldMatConn = nil end
+			for p, m in pairs(origMats) do if p and p.Parent then p.Material = m end end
+			origMats = {}
+		end
+
+		local function applyWorldColor(col)
+			for _, p in ipairs(workspace:GetDescendants()) do
+				if p:IsA("BasePart") then
+					if not origColors[p] then origColors[p] = p.Color end
+					p.Color = col
+				end
+			end
+		end
+
+		local function resetWorldColor()
+			for p, c in pairs(origColors) do if p and p.Parent then p.Color = c end end
+			origColors = {}
+		end
+
+		stopWorld = function()
+			toggleRotatingSkybox(false)
+			setFog(false)
+			applySky(nil)
+			resetWorldMat()
+			resetWorldColor()
+		end
 		local playerFlingAction
 		local playerKnifeKill
 		local playerGunKill
@@ -6070,6 +6189,79 @@ return (function(...)
 				stopEmote()
 				resetAnims()
 			end
+
+			-- per-slot overrides: user can right-click a bundle to apply only specific slots
+			local slotOverrides = {}  -- { idle=slots, walk=slots, ... } keyed by slot name
+			local slotOverridePack = {} -- which bundle each slot override came from
+
+			local SLOT_NAMES = { "idle", "walk", "run", "jump", "fall", "climb", "swim" }
+
+			local function applySlotOverrides()
+				local animate = getAnimate()
+				if not animate then return end
+				backupAnims(animate)
+				for _, folder in ipairs(animate:GetChildren()) do
+					local slot = folder.Name:lower()
+					local ids = slotOverrides[slot]
+					if ids and #ids > 0 then
+						for i, a in ipairs(sortedAnims(folder)) do
+							a.AnimationId = ids[i] or ids[1]
+						end
+					end
+				end
+				restartAnimate()
+			end
+
+			local function saveSlotOverride(slot, b, ids)
+				slotOverrides[slot] = ids
+				slotOverridePack[slot] = b and { id = b.id, name = b.name, assets = b.assets }
+				config["Free anims/slots/" .. slot] = b and { id = b.id, name = b.name, assets = b.assets, ids = ids } or nil
+				dirty, dirtyAt = true, os.clock()
+			end
+
+			local function clearSlotOverride(slot)
+				slotOverrides[slot] = nil
+				slotOverridePack[slot] = nil
+				config["Free anims/slots/" .. slot] = nil
+				dirty, dirtyAt = true, os.clock()
+				-- restore just this slot from origAnims
+				local animate = getAnimate()
+				if not animate or not origAnims then return end
+				for _, folder in ipairs(animate:GetChildren()) do
+					if folder.Name:lower() == slot then
+						for _, a in ipairs(sortedAnims(folder)) do
+							if origAnims[a] then a.AnimationId = origAnims[a] end
+						end
+					end
+				end
+				restartAnimate()
+			end
+
+			-- restore slot overrides on character spawn
+			connect(player.CharacterAdded, function(char)
+				char:WaitForChild("Animate", 10)
+				task.wait(0.4)
+				if next(slotOverrides) then applySlotOverrides() end
+			end)
+
+			-- register each slot override for config save/load
+			for _, slot in ipairs(SLOT_NAMES) do
+				local s = slot
+				register("Free anims/slots/" .. s, function(v)
+					if type(v) == "table" and v.ids then
+						slotOverrides[s] = v.ids
+						slotOverridePack[s] = { id = v.id, name = v.name, assets = v.assets }
+						task.spawn(function()
+							local char = player.Character or player.CharacterAdded:Wait()
+							char:WaitForChild("Animate", 10)
+							task.wait(0.5)
+							applySlotOverrides()
+						end)
+					end
+				end, function()
+					return config["Free anims/slots/" .. s] or false
+				end, false)
+			end
 			register("Free anims/pack", function(v)
 				if type(v) == "table" and v.id then
 					task.spawn(function()
@@ -6494,6 +6686,175 @@ return (function(...)
 					else
 						playEmote(item)
 					end
+				end)
+				-- right-click: per-slot picker for bundles
+				connect(card.MouseButton2Click, function()
+					if item.kind ~= "b" then return end
+					task.spawn(function()
+						-- resolve slots first (may need network)
+						local slots = getSlots(item)
+						if not slots then
+							notify("Free anims", "can't load slots for " .. item.name)
+							return
+						end
+
+						-- build popup
+						local popupGui = create("Frame", {
+							Name = "SlotPicker",
+							AnchorPoint = Vector2.new(0.5, 0.5),
+							Position = UDim2.fromScale(0.5, 0.5),
+							Size = UDim2.fromOffset(260, 50),  -- will grow
+							BackgroundColor3 = Color3.fromRGB(20, 20, 20),
+							BorderSizePixel = 0,
+							ZIndex = 200,
+							ClipsDescendants = false,
+							Parent = gui,
+						})
+						addCorner(popupGui, 10)
+						addStroke(popupGui)
+
+						-- title
+						create("TextLabel", {
+							Text = item.name,
+							Font = Enum.Font.GothamBold,
+							TextSize = 12,
+							TextColor3 = accentColor,
+							BackgroundTransparency = 1,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							Position = UDim2.fromOffset(12, 10),
+							Size = UDim2.new(1, -24, 0, 16),
+							TextTruncate = Enum.TextTruncate.AtEnd,
+							ZIndex = 201,
+							Parent = popupGui,
+						})
+						create("TextLabel", {
+							Text = "right-click: apply individual slots",
+							Font = Enum.Font.Gotham,
+							TextSize = 10,
+							TextColor3 = dimColor,
+							BackgroundTransparency = 1,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							Position = UDim2.fromOffset(12, 26),
+							Size = UDim2.new(1, -24, 0, 14),
+							ZIndex = 201,
+							Parent = popupGui,
+						})
+
+						local rowY = 46
+						local slotDisplayNames = {
+							idle = "Idle", walk = "Walk", run = "Run",
+							jump = "Jump", fall = "Fall", climb = "Climb", swim = "Swim",
+						}
+						for _, slot in ipairs(SLOT_NAMES) do
+							if slots[slot] then
+								local isActive = slotOverrides[slot] and slotOverridePack[slot] and slotOverridePack[slot].id == item.id
+								local rowBtn = create("TextButton", {
+									Text = "",
+									BackgroundColor3 = isActive and Color3.fromRGB(36, 36, 36) or Color3.fromRGB(27, 27, 27),
+									AutoButtonColor = false,
+									Position = UDim2.fromOffset(8, rowY),
+									Size = UDim2.new(1, -16, 0, 28),
+									ZIndex = 201,
+									Parent = popupGui,
+								})
+								addCorner(rowBtn, 6)
+								local rowStroke = addStroke(rowBtn, isActive and accentColor or strokeColor)
+
+								create("TextLabel", {
+									Text = slotDisplayNames[slot] or slot,
+									Font = Enum.Font.GothamMedium,
+									TextSize = 12,
+									TextColor3 = isActive and accentColor or textColor,
+									BackgroundTransparency = 1,
+									TextXAlignment = Enum.TextXAlignment.Left,
+									Position = UDim2.fromOffset(10, 0),
+									Size = UDim2.new(0.6, 0, 1, 0),
+									ZIndex = 202,
+									Parent = rowBtn,
+								})
+								local statusLbl = create("TextLabel", {
+									Text = isActive and "✓ active" or "apply",
+									Font = Enum.Font.Gotham,
+									TextSize = 10,
+									TextColor3 = isActive and accentColor or dimColor,
+									BackgroundTransparency = 1,
+									TextXAlignment = Enum.TextXAlignment.Right,
+									AnchorPoint = Vector2.new(1, 0.5),
+									Position = UDim2.new(1, -10, 0.5, 0),
+									Size = UDim2.fromOffset(60, 20),
+									ZIndex = 202,
+									Parent = rowBtn,
+								})
+								local sl = slot
+								connect(rowBtn.MouseEnter, function()
+									tween(rowBtn, 0.1, { BackgroundColor3 = Color3.fromRGB(40, 40, 40) })
+								end)
+								connect(rowBtn.MouseLeave, function()
+									tween(rowBtn, 0.1, { BackgroundColor3 = slotOverrides[sl] and slotOverridePack[sl] and slotOverridePack[sl].id == item.id and Color3.fromRGB(36,36,36) or Color3.fromRGB(27,27,27) })
+								end)
+								connect(rowBtn.MouseButton1Click, function()
+									if slotOverrides[sl] and slotOverridePack[sl] and slotOverridePack[sl].id == item.id then
+										clearSlotOverride(sl)
+										statusLbl.Text = "apply"
+										statusLbl.TextColor3 = dimColor
+										tween(rowStroke, 0.15, { Color = strokeColor })
+										tween(rowBtn, 0.15, { BackgroundColor3 = Color3.fromRGB(27, 27, 27) })
+									else
+										saveSlotOverride(sl, item, slots[sl])
+										applySlotOverrides()
+										statusLbl.Text = "✓ active"
+										statusLbl.TextColor3 = accentColor
+										tween(rowStroke, 0.15, { Color = accentColor })
+										tween(rowBtn, 0.15, { BackgroundColor3 = Color3.fromRGB(36, 36, 36) })
+										notify("Slot: " .. slotDisplayNames[sl], item.name)
+									end
+								end)
+								rowY += 34
+							end
+						end
+
+						-- clear all + close buttons
+						local clearBtn = create("TextButton", {
+							Text = "Clear all slots",
+							Font = Enum.Font.GothamMedium,
+							TextSize = 11,
+							TextColor3 = dimColor,
+							BackgroundColor3 = Color3.fromRGB(27, 27, 27),
+							AutoButtonColor = false,
+							Position = UDim2.fromOffset(8, rowY + 4),
+							Size = UDim2.new(1, -16, 0, 24),
+							ZIndex = 201,
+							Parent = popupGui,
+						})
+						addCorner(clearBtn, 6)
+						connect(clearBtn.MouseButton1Click, function()
+							for _, sl in ipairs(SLOT_NAMES) do
+								if slotOverrides[sl] then clearSlotOverride(sl) end
+							end
+							notify("Free anims", "all slot overrides cleared")
+							popupGui:Destroy()
+						end)
+
+						popupGui.Size = UDim2.fromOffset(260, rowY + 36)
+
+						-- click outside to close
+						local closeConn
+						closeConn = connect(game:GetService("UserInputService").InputBegan, function(inp)
+							if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.MouseButton2 then
+								task.defer(function()
+									if popupGui and popupGui.Parent then
+										local mx, my = inp.Position.X, inp.Position.Y
+										local ap = popupGui.AbsolutePosition
+										local as = popupGui.AbsoluteSize
+										if mx < ap.X or mx > ap.X + as.X or my < ap.Y or my > ap.Y + as.Y then
+											popupGui:Destroy()
+											if closeConn then closeConn:Disconnect() end
+										end
+									end
+								end)
+							end
+						end)
+					end)
 				end)
 			end
 
@@ -15717,6 +16078,139 @@ return (function(...)
 		dirty = false
 		loading = false
 
+		-- ── World Tab UI ─────────────────────────────────────────────────────
+		do
+			local matByName = {}
+			local matNames  = { "Default" }
+			for _, e in ipairs({
+				{"Grass",Enum.Material.Grass},{"Leafy Grass",Enum.Material.LeafyGrass},
+				{"Ground",Enum.Material.Ground},{"Mud",Enum.Material.Mud},
+				{"Sand",Enum.Material.Sand},{"Rock",Enum.Material.Rock},
+				{"Concrete",Enum.Material.Concrete},{"Asphalt",Enum.Material.Asphalt},
+				{"Cobblestone",Enum.Material.Cobblestone},{"Brick",Enum.Material.Brick},
+				{"SmoothPlastic",Enum.Material.SmoothPlastic},{"Wood",Enum.Material.Wood},
+				{"WoodPlanks",Enum.Material.WoodPlanks},{"Marble",Enum.Material.Marble},
+				{"Granite",Enum.Material.Granite},{"Ice",Enum.Material.Ice},
+				{"Neon",Enum.Material.Neon},{"Glass",Enum.Material.Glass},
+				{"Metal",Enum.Material.Metal},{"DiamondPlate",Enum.Material.DiamondPlate},
+				{"Foil",Enum.Material.Foil},{"Fabric",Enum.Material.Fabric},
+			}) do matByName[e[1]] = e[2]; matNames[#matNames+1] = e[1] end
+
+			local skyNames = { "Default","Piss","Peach","Saku","Purple","Retro","Space","Sea",
+				"Night V2","Dark","Anime","Beach","Space V2","Pink","Rainbow",
+				"Forest","Night","Lava","Rainy","Green","Volcanic","Minecraft","Lucid","Nebulous" }
+
+			local fogSec  = addSection(worldTab, "Fog")
+			local skySec  = addSection(worldTab, "Skybox")
+			local matSec  = addSection(worldTab, "Materials")
+
+			-- Fog
+			fogSec:Toggle("Enabled", "toggle custom fog", function(on)
+				setConfig("World/Fog/Enabled", on)
+				worldFogEnabled = on
+				setFog(on)
+			end)
+			register("World/Fog/Enabled", function(v)
+				worldFogEnabled = v == true
+				setFog(worldFogEnabled)
+			end, function() return config["World/Fog/Enabled"] or false end, false)
+
+			fogSec:Slider("Fog Start", 0, 2000, 0, function(v)
+				setConfig("World/Fog/Start", v)
+				if worldFogEnabled then Lighting.FogStart = v end
+			end)
+			register("World/Fog/Start", function(v)
+				if type(v) == "number" then
+					if worldFogEnabled then Lighting.FogStart = v end
+				end
+			end, function() return config["World/Fog/Start"] or 0 end, 0)
+
+			fogSec:Slider("Fog End", 50, 5000, 500, function(v)
+				setConfig("World/Fog/End", v)
+				if worldFogEnabled then Lighting.FogEnd = v end
+			end)
+			register("World/Fog/End", function(v)
+				if type(v) == "number" and worldFogEnabled then Lighting.FogEnd = v end
+			end, function() return config["World/Fog/End"] or 500 end, 500)
+
+			fogSec:ColorPicker("Fog Color", "color of the fog", Color3.fromRGB(180,180,200), function(c)
+				setConfig("World/Fog/Color", { c.R, c.G, c.B })
+				if worldFogEnabled then Lighting.FogColor = c end
+			end)
+
+			-- Skybox
+			skySec:Toggle("Spinning Skybox", "slowly rotates the sky", function(on)
+				setConfig("World/Sky/Spin", on)
+				toggleRotatingSkybox(on)
+			end)
+			register("World/Sky/Spin", function(v)
+				toggleRotatingSkybox(v == true)
+			end, function() return config["World/Sky/Spin"] or false end, false)
+
+			local skyDrop = skySec:Dropdown("Skybox", "choose a sky", skyNames, "Default", function(v)
+				setConfig("World/Sky/Selected", v)
+				if v == "Default" then applySky(nil) else applySky(v) end
+			end)
+			register("World/Sky/Selected", function(v)
+				if type(v) == "string" then
+					if skyDrop then pcall(function() skyDrop.Set(v, true) end) end
+					if v == "Default" then applySky(nil) else applySky(v) end
+				end
+			end, function() return config["World/Sky/Selected"] or "Default" end, "Default")
+
+			-- Materials
+			matSec:Toggle("Custom Color", "tint all world parts one color", function(on)
+				setConfig("World/Mat/ColorEnabled", on)
+				if on then
+					local c = config["World/Mat/Color"]
+					local col = c and Color3.fromRGB(c[1]*255, c[2]*255, c[3]*255) or Color3.new(1,1,1)
+					applyWorldColor(col)
+				else
+					resetWorldColor()
+				end
+			end)
+			register("World/Mat/ColorEnabled", function(v)
+				if v == true then
+					local c = config["World/Mat/Color"]
+					local col = c and Color3.fromRGB(c[1]*255, c[2]*255, c[3]*255) or Color3.new(1,1,1)
+					applyWorldColor(col)
+				else
+					resetWorldColor()
+				end
+			end, function() return config["World/Mat/ColorEnabled"] or false end, false)
+
+			matSec:ColorPicker("Color", "world part tint", Color3.new(1,1,1), function(c)
+				setConfig("World/Mat/Color", { c.R, c.G, c.B })
+				if config["World/Mat/ColorEnabled"] then applyWorldColor(c) end
+			end)
+
+			local matDrop = matSec:Dropdown("Material", "replace all world materials", matNames, "Default", function(v)
+				setConfig("World/Material/Selected", v)
+				if v == "Default" then
+					resetWorldMat()
+				else
+					local mat = matByName[v]
+					if mat then applyWorldMat(mat) end
+				end
+			end)
+			register("World/Material/Selected", function(v)
+				if type(v) == "string" then
+					if matDrop then pcall(function() matDrop.Set(v, true) end) end
+					if v == "Default" then resetWorldMat()
+					else local mat = matByName[v]; if mat then applyWorldMat(mat) end end
+				end
+			end, function() return config["World/Material/Selected"] or "Default" end, "Default")
+
+			matSec:Button("Reset All", "restore original materials and colors", function()
+				resetWorldMat()
+				resetWorldColor()
+				if matDrop then pcall(function() matDrop.Set("Default", true) end) end
+				setConfig("World/Material/Selected", "Default")
+				setConfig("World/Mat/ColorEnabled", false)
+				setConfig("World/Mat/Color", nil)
+			end)
+		end
+
 		_G.SelectWTFUnload = function()
 			for _, c in ipairs(connections) do
 				c:Disconnect()
@@ -15775,6 +16269,9 @@ return (function(...)
 			end
 			if stopAnims then
 				pcall(stopAnims)
+			end
+			if stopWorld then
+				pcall(stopWorld)
 			end
 			if lobbyBrand then
 				lobbyBrand:Destroy()
