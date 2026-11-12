@@ -3520,13 +3520,47 @@ return (function(...)
 			if rotatingSkyConn then rotatingSkyConn:Disconnect(); rotatingSkyConn = nil end
 			if on then
 				local sky = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky", Lighting)
-				rotatingSkyConn = connect(game:GetService("RunService").PreRender, function(dt)
+				rotatingSkyConn = connect(RunService.RenderStepped, function(dt)
 					sky.SkyboxOrientation = sky.SkyboxOrientation + Vector3.new(0, 30 * dt, 0)
 				end)
 			else
 				local sky = Lighting:FindFirstChildOfClass("Sky")
 				if sky then sky.SkyboxOrientation = Vector3.new(0, 0, 0) end
 			end
+		end
+
+		local origLighting = {
+			Brightness    = Lighting.Brightness,
+			ClockTime     = Lighting.ClockTime,
+			GlobalShadows = Lighting.GlobalShadows,
+		}
+		local lightingConn = nil
+
+		local function setLightingMode(mode)
+			if lightingConn then lightingConn:Disconnect(); lightingConn = nil end
+			if mode == "Day" then
+				Lighting.ClockTime = 14; Lighting.Brightness = 1; Lighting.GlobalShadows = true
+				lightingConn = connect(RunService.RenderStepped, function()
+					Lighting.ClockTime = 14; Lighting.Brightness = 1; Lighting.GlobalShadows = true
+				end)
+			elseif mode == "Night" then
+				Lighting.ClockTime = 0; Lighting.Brightness = 1
+				lightingConn = connect(RunService.RenderStepped, function()
+					Lighting.ClockTime = 0; Lighting.Brightness = 1
+				end)
+			elseif mode == "Sunset" then
+				Lighting.ClockTime = 18
+				lightingConn = connect(RunService.RenderStepped, function()
+					Lighting.ClockTime = 18
+				end)
+			end
+		end
+
+		local function resetLighting()
+			if lightingConn then lightingConn:Disconnect(); lightingConn = nil end
+			Lighting.Brightness    = origLighting.Brightness
+			Lighting.ClockTime     = origLighting.ClockTime
+			Lighting.GlobalShadows = origLighting.GlobalShadows
 		end
 
 		local function setFog(on)
@@ -3584,6 +3618,7 @@ return (function(...)
 			applySky(nil)
 			resetWorldMat()
 			resetWorldColor()
+			resetLighting()
 		end
 		local playerFlingAction
 		local playerKnifeKill
@@ -16157,6 +16192,44 @@ return (function(...)
 					if v == "Default" then applySky(nil) else applySky(v) end
 				end
 			end, function() return config["World/Sky/Selected"] or "Default" end, "Default")
+
+			-- Materials
+			local lightSec = addSection(worldTab, "Lighting")
+
+			lightSec:Toggle("Fullbright", "max brightness, removes shadows", function(on)
+				setConfig("World/Light/Fullbright", on)
+				if on then
+					Lighting.Brightness = 5; Lighting.ClockTime = 12
+					if not lightingConn then
+						lightingConn = connect(RunService.RenderStepped, function()
+							Lighting.Brightness = 5; Lighting.ClockTime = 12
+						end)
+					end
+				else
+					resetLighting()
+					local mode = config["World/Light/TimeOfDay"]
+					if mode and mode ~= "None" then setLightingMode(mode) end
+				end
+			end)
+			register("World/Light/Fullbright", function(v)
+				if v == true then
+					Lighting.Brightness = 5; Lighting.ClockTime = 12
+					lightingConn = lightingConn or connect(RunService.RenderStepped, function()
+						Lighting.Brightness = 5; Lighting.ClockTime = 12
+					end)
+				end
+			end, function() return config["World/Light/Fullbright"] or false end, false)
+
+			register("World/Light/TimeOfDay", function(v)
+				if type(v) == "string" and v ~= "None" then
+					setLightingMode(v)
+				end
+			end, function() return config["World/Light/TimeOfDay"] or "None" end, "None")
+
+			lightSec:Button("Day",           "lock to daytime",   function() setConfig("World/Light/TimeOfDay", "Day");     setLightingMode("Day")    end)
+			lightSec:Button("Night",         "lock to night",     function() setConfig("World/Light/TimeOfDay", "Night");   setLightingMode("Night")  end)
+			lightSec:Button("Sunset",        "lock to sunset",    function() setConfig("World/Light/TimeOfDay", "Sunset");  setLightingMode("Sunset") end)
+			lightSec:Button("Reset Lighting","restore original",  function() setConfig("World/Light/TimeOfDay", "None"); setConfig("World/Light/Fullbright", false); resetLighting() end)
 
 			-- Materials
 			matSec:Toggle("Custom Color", "tint all world parts one color", function(on)
